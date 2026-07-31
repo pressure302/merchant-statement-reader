@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+tmp/
+*.pdf
+*.csv
+*.xlsx
+*.docx
+*.png
+.venv/
+venv/
