@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from merchant_statement_reader.models import FeeCategory
+from merchant_statement_reader.models import ComparisonRole, FeeCategory
 from merchant_statement_reader.parser import analyze_statement
 
 
@@ -97,12 +97,14 @@ Total (Misc Fees and Card Fees) -$711.66
 def test_pricing_summary_detects_fiserv_style_markup() -> None:
     analysis = analyze_statement(FISERV_STYLE_CARD_PROCESSING_SAMPLE)
     pricing = analysis.pricing_summary
+    dues = next(group for group in analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING) if group.normalized_name == "Dues And Assessments")
 
     assert pricing.program_type == "IC+"
     assert pricing.rate == Decimal("3.00000")
     assert pricing.per_transaction_fee == Decimal("0.02000")
     assert analysis.customer_paid_fees == Decimal("2.68")
     assert analysis.merchant_paid_total_fees == Decimal("708.98")
+    assert dues.amount == Decimal("10.33")
 
 
 PAYSAFE_SAMPLE = """
@@ -128,8 +130,10 @@ AUTHS & AVS
 AMEXCT043
 06/30/26 CF SYSTEM PROCESSING FEE 5078.66 0.00400 -$20.31
 VISA
+06/30/26 CF CR DUES AND ASSESS 19616.89 0.00140 -$27.46
 06/30/26 CF NQUAL DISC 17462.03 0.03846 -$671.59
 VS OFLN DB
+06/30/26 CF DB DUES AND ASSESS 16860.52 0.00130 -$21.92
 06/30/26 CF QUAL DISC 7134.05 0.03846 -$274.38
 Total Card Fees -$2,443.44
 06/30/26 MISC BATCH HEADER 42.00 0.2500 -$10.50
@@ -142,6 +146,7 @@ Total (Misc Fees and Card Fees) -$2,537.66
 def test_paysafe_statement_detects_flat_pricing_when_tier_rates_match() -> None:
     analysis = analyze_statement(PAYSAFE_SAMPLE)
     pricing = analysis.pricing_summary
+    dues = next(group for group in analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING) if group.normalized_name == "Dues And Assessments")
 
     assert analysis.processor_name == "Paysafe"
     assert analysis.total_processing == Decimal("55687.60")
@@ -152,6 +157,7 @@ def test_paysafe_statement_detects_flat_pricing_when_tier_rates_match() -> None:
     assert pricing.rate == Decimal("3.84600")
     assert pricing.per_transaction_fee == Decimal("0.1000")
     assert analysis.hidden_processor_total == Decimal("0")
+    assert dues.amount == Decimal("66.92")
 
 
 TRUE_TIERED_SAMPLE = PAYSAFE_SAMPLE.replace(

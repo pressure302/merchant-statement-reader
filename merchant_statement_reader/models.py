@@ -71,12 +71,14 @@ class FeeGroup:
 
     @property
     def comparison_role(self) -> ComparisonRole:
+        text = " ".join([self.normalized_name, *self.raw_names]).lower()
+        if is_dues_and_assessments_text(text):
+            return ComparisonRole.CARD_PROCESSING
         if self.category == FeeCategory.CARD_BRAND:
             return ComparisonRole.PASS_THROUGH
         if self.category != FeeCategory.PROCESSOR:
             return ComparisonRole.HIDDEN
 
-        text = " ".join([self.normalized_name, *self.raw_names]).lower()
         if is_pass_through_processor_text(text):
             return ComparisonRole.PASS_THROUGH
         if is_monthly_optional_processor_text(text):
@@ -370,6 +372,8 @@ HIGH_PRIORITY_TERMS = {
     "disc 1": 0,
     "discount": 0,
     "sales discount": 0,
+    "dues": 1,
+    "due/asmt": 1,
     "other volume": 1,
     "other item": 1,
     "sales trans": 1,
@@ -381,6 +385,19 @@ HIGH_PRIORITY_TERMS = {
     "batch": 3,
     "platform": 3,
 }
+
+
+def is_dues_and_assessments_text(text: str) -> bool:
+    return any(
+        term in text
+        for term in (
+            "dues & assessments",
+            "dues and assessments",
+            "dues and assess",
+            "dues & assess",
+            "due/asmt",
+        )
+    )
 
 
 def is_pass_through_processor_text(text: str) -> bool:

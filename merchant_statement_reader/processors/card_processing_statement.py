@@ -219,6 +219,8 @@ def categorize_by_description(description: str) -> FeeCategory:
 
 
 def normalize_statement_fee_name(description: str) -> str:
+    if re.search(r"\b(?:dues?\s*(?:&|and)\s*assess(?:ments?)?|due/asmt)\b", description, re.I):
+        return "Dues And Assessments"
     normalized = re.sub(r"\b\d{1,7}\s+(?:TRANSACTIONS|KILOBYTES|TRANS)\s+AT\s+\$?\.?\d+\b", "", description, flags=re.I)
     normalized = re.sub(r"\b\$?[\d,]+\.\d{2}\s+AT\s*\.?\d+\b", "", normalized, flags=re.I)
     normalized = re.sub(r"\b\.?\d+(?:\.\d+)?\s+(?:DISC RATE )?TIMES\s+\$?[\d,]+\.\d{2}\b", "", normalized, flags=re.I)
