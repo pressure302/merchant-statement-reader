@@ -63,12 +63,13 @@ class MerchantStatementApp(tk.Tk):
 
         source_metrics = ttk.Frame(outer)
         source_metrics.pack(fill=tk.X, pady=(0, 16))
+        source_metrics.columnconfigure(0, weight=1)
+        source_metrics.columnconfigure(4, weight=1)
         self.source_metric_vars = {
-            "processor_iso": self._metric(source_metrics, "Processor / ISO Fees", 0, "FeesMetric.TLabel"),
-            "card_brand": self._metric(source_metrics, "Card Brand / Network", 1, "FeesMetric.TLabel"),
-            "daily_paid": self._metric(source_metrics, "Daily Paid", 2, "FeesMetric.TLabel"),
+            "processor_iso": self._metric(source_metrics, "Processor / ISO Fees", 1, "FeesMetric.TLabel", is_first=True),
+            "card_brand": self._metric(source_metrics, "Card Brand / Network", 2, "FeesMetric.TLabel"),
+            "daily_paid": self._metric(source_metrics, "Daily Paid", 3, "FeesMetric.TLabel"),
         }
-        source_metrics.columnconfigure(3, weight=1, uniform="metrics")
 
         main = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
         main.pack(fill=tk.BOTH, expand=True)
@@ -80,11 +81,18 @@ class MerchantStatementApp(tk.Tk):
         self.card_brand_total_var = self._build_fee_panel(card_brand_panel, "Card Processing Charges")
         self.processor_total_var = self._build_fee_panel(processor_panel, "Monthly / Optional Charges")
 
-    def _metric(self, parent: ttk.Frame, name: str, column: int, value_style: str = "Metric.TLabel") -> tk.StringVar:
+    def _metric(
+        self,
+        parent: ttk.Frame,
+        name: str,
+        column: int,
+        value_style: str = "Metric.TLabel",
+        is_first: bool = False,
+    ) -> tk.StringVar:
         card = ttk.Frame(parent, style="Panel.TFrame", padding=14, height=METRIC_CARD_HEIGHT)
-        card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 10, 0))
+        card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 or is_first else 10, 0))
         card.grid_propagate(False)
-        parent.columnconfigure(column, weight=1, uniform="metrics")
+        parent.columnconfigure(column, weight=4, uniform="metrics")
         ttk.Label(card, text=name, style="MetricName.TLabel").pack(anchor=tk.W)
         value = tk.StringVar(value="--")
         ttk.Label(card, textvariable=value, style=value_style).pack(anchor=tk.W, pady=(4, 0))
