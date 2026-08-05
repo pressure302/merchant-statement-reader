@@ -2,7 +2,13 @@ from decimal import Decimal
 
 from merchant_statement_reader.models import ComparisonRole, FeeCategory
 from merchant_statement_reader.parser import analyze_statement
-from merchant_statement_reader.ui import card_processing_panel_groups, group_to_display_row, month_end_groups_total, total_fees_display
+from merchant_statement_reader.ui import (
+    card_processing_panel_groups,
+    fee_source_totals,
+    group_to_display_row,
+    month_end_groups_total,
+    total_fees_display,
+)
 
 
 SAMPLE = """
@@ -224,6 +230,7 @@ def test_daily_paid_statement_explains_month_end_fees_without_merchant_data() ->
     analysis = analyze_statement(DAILY_PAID_MONTH_END_SAMPLE)
     left_groups = card_processing_panel_groups(analysis)
     monthly_groups = analysis.comparison_groups_for(ComparisonRole.MONTHLY_OPTIONAL)
+    source_totals = fee_source_totals(left_groups, monthly_groups, analysis)
     qual_disc = next(group for group in left_groups if group.normalized_name == "Qual Disc")
     fixed_network = next(group for group in left_groups if group.normalized_name == "Fixed Network Cnp Fee")
     dues = next(group for group in left_groups if group.normalized_name == "Dues And Assessments")
@@ -248,6 +255,10 @@ def test_daily_paid_statement_explains_month_end_fees_without_merchant_data() ->
     assert month_end_groups_total(left_groups, analysis) == Decimal("54.78")
     assert month_end_groups_total(monthly_groups, analysis) == Decimal("28.20")
     assert month_end_groups_total(left_groups, analysis) + month_end_groups_total(monthly_groups, analysis) == analysis.merchant_paid_total_fees
+    assert source_totals["processor_iso"] == Decimal("49.50")
+    assert source_totals["card_brand"] == Decimal("33.48")
+    assert source_totals["daily_paid"] == Decimal("227.81")
+    assert source_totals["processor_iso"] + source_totals["card_brand"] == analysis.merchant_paid_total_fees
     assert qual_disc.is_likely_daily_paid
     assert last_processor_index < first_card_brand_index
     assert daily_paid_index > last_month_end_index

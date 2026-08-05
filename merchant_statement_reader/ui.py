@@ -53,12 +53,20 @@ class MerchantStatementApp(tk.Tk):
         ttk.Label(outer, textvariable=self.status_var).pack(fill=tk.X, pady=(8, 16))
 
         metrics = ttk.Frame(outer)
-        metrics.pack(fill=tk.X, pady=(0, 16))
+        metrics.pack(fill=tk.X, pady=(0, 10))
         self.metric_vars = {
             "processing": self._metric(metrics, "Total Processing", 0),
             "fees": self._metric(metrics, "Total Fees", 1, "FeesMetric.TLabel"),
             "effective": self._metric(metrics, "Effective Rate", 2),
             "processor": self._metric(metrics, "Processor Pricing", 3, "PricingMetric.TLabel"),
+        }
+
+        source_metrics = ttk.Frame(outer)
+        source_metrics.pack(fill=tk.X, pady=(0, 16))
+        self.source_metric_vars = {
+            "processor_iso": self._metric(source_metrics, "Processor / ISO Fees", 0, "FeesMetric.TLabel"),
+            "card_brand": self._metric(source_metrics, "Card Brand / Network", 1, "FeesMetric.TLabel"),
+            "daily_paid": self._metric(source_metrics, "Daily Paid", 2, "FeesMetric.TLabel"),
         }
 
         main = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
@@ -154,6 +162,10 @@ class MerchantStatementApp(tk.Tk):
 
         card_groups = card_processing_panel_groups(analysis)
         monthly_groups = analysis.comparison_groups_for(ComparisonRole.MONTHLY_OPTIONAL)
+        source_totals = fee_source_totals(card_groups, monthly_groups, analysis)
+        self.source_metric_vars["processor_iso"].set(money(source_totals["processor_iso"]))
+        self.source_metric_vars["card_brand"].set(money(source_totals["card_brand"]))
+        self.source_metric_vars["daily_paid"].set(money(source_totals["daily_paid"]))
         self._render_table(self.card_brand_tree, card_groups, mark_daily_paid=bool(analysis.customer_paid_fees))
         self._render_table(self.processor_tree, monthly_groups)
         self.card_brand_total_var.set(panel_total_display(month_end_groups_total(card_groups, analysis), analysis.customer_paid_fees))
@@ -304,6 +316,26 @@ def month_end_groups_total(groups: list[FeeGroup], analysis: StatementAnalysis) 
         (group.amount for group in groups if not (analysis.customer_paid_fees and group.is_likely_daily_paid)),
         Decimal("0"),
     )
+
+
+def fee_source_totals(
+    card_groups: list[FeeGroup],
+    monthly_groups: list[FeeGroup],
+    analysis: StatementAnalysis,
+) -> dict[str, Decimal]:
+    totals = {
+        "processor_iso": Decimal("0"),
+        "card_brand": Decimal("0"),
+        "daily_paid": analysis.customer_paid_fees,
+    }
+    for group in [*card_groups, *monthly_groups]:
+        if analysis.customer_paid_fees and group.is_likely_daily_paid:
+            continue
+        if group.source_label == "Processor / ISO":
+            totals["processor_iso"] += group.amount
+        elif group.source_label == "Card brand / network":
+            totals["card_brand"] += group.amount
+    return totals
 
 
 def panel_total_display(month_end_total: Decimal, daily_paid: Decimal) -> str:
