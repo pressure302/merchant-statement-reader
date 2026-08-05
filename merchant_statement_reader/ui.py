@@ -86,17 +86,19 @@ class MerchantStatementApp(tk.Tk):
         total_var = tk.StringVar(value="$0.00")
         ttk.Label(heading, textvariable=total_var, style="Panel.TLabel", font=("Segoe UI Semibold", 13)).pack(side=tk.RIGHT)
 
-        columns = ("fee", "amount", "rates", "items")
+        columns = ("fee", "amount", "source", "rates", "items")
         tree = ttk.Treeview(parent, columns=columns, show="headings", selectmode="browse")
         headings = {
             "fee": "Fee",
             "amount": "Amount",
+            "source": "Source",
             "rates": "Rate",
             "items": "Items",
         }
         widths = {
-            "fee": 340,
+            "fee": 265,
             "amount": 105,
+            "source": 150,
             "rates": 110,
             "items": 70,
         }
@@ -150,7 +152,7 @@ class MerchantStatementApp(tk.Tk):
         groups = self.analysis.grouped_fees()
         with open(path, "w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["Comparison Role", "Category", "Fee", "Amount", "Brands", "Rates", "Items", "Confidence", "Raw Names"])
+            writer.writerow(["Comparison Role", "Category", "Fee", "Amount", "Source", "Brands", "Rates", "Items", "Confidence", "Raw Names"])
             for group in groups:
                 writer.writerow([group.comparison_role.value] + group_to_row(group) + [", ".join(sorted(group.raw_names))])
         messagebox.showinfo("Export complete", f"Saved {Path(path).name}.")
@@ -163,14 +165,12 @@ class MerchantStatementApp(tk.Tk):
         self.metric_vars["effective"].set(percent(analysis.effective_rate))
         self.metric_vars["processor"].set(analysis.pricing_summary.display_text)
 
-        self._render_table(
-            self.card_brand_tree,
-            analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING),
-            mark_daily_paid=bool(analysis.customer_paid_fees),
-        )
-        self._render_table(self.processor_tree, analysis.comparison_groups_for(ComparisonRole.MONTHLY_OPTIONAL))
-        self.card_brand_total_var.set(money(analysis.card_processing_processor_total))
-        self.processor_total_var.set(money(analysis.monthly_optional_processor_total))
+        card_groups = card_processing_panel_groups(analysis)
+        monthly_groups = analysis.comparison_groups_for(ComparisonRole.MONTHLY_OPTIONAL)
+        self._render_table(self.card_brand_tree, card_groups, mark_daily_paid=bool(analysis.customer_paid_fees))
+        self._render_table(self.processor_tree, monthly_groups)
+        self.card_brand_total_var.set(panel_total_display(month_end_groups_total(card_groups, analysis), analysis.customer_paid_fees))
+        self.processor_total_var.set(money(month_end_groups_total(monthly_groups, analysis)))
         unknown = f" Needs review: {money(analysis.unknown_total)}." if analysis.unknown_total else ""
         hidden = f" Hidden from comparison: {money(analysis.hidden_processor_total)}." if analysis.hidden_processor_total else ""
         customer_paid = (
@@ -180,8 +180,8 @@ class MerchantStatementApp(tk.Tk):
         )
         self.status_var.set(
             f"Loaded using {analysis.processor_name}. Merchant: {analysis.merchant_name or 'not detected'}. "
-            f"Period: {analysis.statement_period or 'not detected'}. Processor charges shown: "
-            f"{money(analysis.competitive_processor_total)}.{customer_paid}{unknown}{hidden}"
+            f"Period: {analysis.statement_period or 'not detected'}. Month-end fees shown: "
+            f"{money(analysis.merchant_paid_total_fees)}.{customer_paid}{unknown}{hidden}"
         )
 
     def _render_table(self, tree: ttk.Treeview, groups: list[FeeGroup], mark_daily_paid: bool = False) -> None:
@@ -196,6 +196,7 @@ def group_to_row(group: FeeGroup) -> list[str]:
         group.category.value,
         group.normalized_name,
         money(group.amount),
+        group.source_label,
         ", ".join(sorted(group.brands)),
         ", ".join(sorted(group.rates)),
         str(group.item_count or ""),
@@ -208,9 +209,31 @@ def group_to_display_row(group: FeeGroup, is_daily_paid: bool = False) -> list[s
     return [
         fee_name,
         money(group.amount),
+        group.source_label,
         ", ".join(sorted(group.rates)),
         str(group.item_count or ""),
     ]
+
+
+def card_processing_panel_groups(analysis: StatementAnalysis) -> list[FeeGroup]:
+    groups = [
+        *analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING),
+        *analysis.comparison_groups_for(ComparisonRole.PASS_THROUGH),
+    ]
+    return sorted(groups, key=lambda group: (0 if group.comparison_role == ComparisonRole.CARD_PROCESSING else 1, group.normalized_name.lower()))
+
+
+def month_end_groups_total(groups: list[FeeGroup], analysis: StatementAnalysis) -> Decimal:
+    return sum(
+        (group.amount for group in groups if not (analysis.customer_paid_fees and group.is_likely_daily_paid)),
+        Decimal("0"),
+    )
+
+
+def panel_total_display(month_end_total: Decimal, daily_paid: Decimal) -> str:
+    if not daily_paid:
+        return money(month_end_total)
+    return f"{money(month_end_total)}\nDaily paid: {money(daily_paid)}"
 
 
 def total_fees_display(analysis: StatementAnalysis) -> str:

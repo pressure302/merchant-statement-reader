@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from merchant_statement_reader.models import ComparisonRole, FeeCategory
 from merchant_statement_reader.parser import analyze_statement
-from merchant_statement_reader.ui import total_fees_display
+from merchant_statement_reader.ui import card_processing_panel_groups, month_end_groups_total, total_fees_display
 
 
 SAMPLE = """
@@ -181,6 +181,63 @@ def test_paysafe_statement_detects_tiered_pricing_when_rates_differ() -> None:
     pricing = analyze_statement(TRUE_TIERED_SAMPLE).pricing_summary
 
     assert pricing.program_type == "Tiered"
+
+
+DAILY_PAID_MONTH_END_SAMPLE = """
+YOUR CARD PROCESSING STATEMENT
+SAMPLE MERCHANT Page 1 of 5 THIS IS NOT A BILL
+StatementPeriod 07/01/26 - 07/31/26
+Page 2 Amounts Submitted $5,923.71
+Page 3 Fees Charged -$310.79
+Month End Charge -$82.98
+Less Discount Paid -$227.81
+FEES CHARGED
+Date Type Description Volume Rate Total
+MASTERCARD
+07/31/26 CF QUAL DISC 5917.14 0.03850 -$227.81
+07/31/26 CF DUES & ASSESSMENTS 0.00000 -$2.42
+07/31/26 CF NABU FEES 0.00000 -$0.64
+VISA
+07/31/26 CF DUES & ASSESSMENTS 0.00000 -$4.51
+07/31/26 CF FIXED NETWORK CNP FEE 0.00000 -$9.00
+AUTHS & AVS
+07/31/26 CF CPU GTWY 79.50 0.1000 -$7.95
+07/31/26 CF SALES ITEMS 267.00 0.0500 -$13.35
+07/31/26 CF TRAN INTEGRITY FEE 0.00000 -$8.70
+07/31/26 CF ACQR PROCESSOR FEES 0.00000 -$1.83
+07/31/26 CF KILOBYTE AUTH FEE US 0.00000 -$0.06
+07/31/26 CF CARD PRESENT TOKEN DOM 0.00000 -$0.08
+07/31/26 CF DISCOVER DATA USAGE FEE 0.00000 -$0.04
+07/31/26 CF LOCATION FEE 0.00000 -$1.25
+07/31/26 CF REG PRODUCT FEE 0.00000 -$4.95
+Total Card Fees -$282.59
+07/31/26 MISC ACCESS ONE MONTHLY 0.00000 -$4.50
+07/31/26 MISC BATCH HEADER 7.00 0.2500 -$1.75
+07/31/26 MISC PLATFORM ACCESS MTLY FEE 0.00000 -$5.00
+07/31/26 MISC STATEMENT FEE 0.00000 -$10.00
+07/31/26 MISC CLOVER SECURITY NONCLOVER 0.00000 -$6.95
+Total (Misc Fees and Card Fees) -$310.79
+"""
+
+
+def test_daily_paid_statement_explains_month_end_fees_without_merchant_data() -> None:
+    analysis = analyze_statement(DAILY_PAID_MONTH_END_SAMPLE)
+    left_groups = card_processing_panel_groups(analysis)
+    monthly_groups = analysis.comparison_groups_for(ComparisonRole.MONTHLY_OPTIONAL)
+    qual_disc = next(group for group in left_groups if group.normalized_name == "Qual Disc")
+    fixed_network = next(group for group in left_groups if group.normalized_name == "Fixed Network Cnp Fee")
+    dues = next(group for group in left_groups if group.normalized_name == "Dues And Assessments")
+
+    assert analysis.total_processing == Decimal("5923.71")
+    assert analysis.total_fees == Decimal("310.79")
+    assert analysis.customer_paid_fees == Decimal("227.81")
+    assert analysis.merchant_paid_total_fees == Decimal("82.98")
+    assert month_end_groups_total(left_groups, analysis) == Decimal("54.78")
+    assert month_end_groups_total(monthly_groups, analysis) == Decimal("28.20")
+    assert month_end_groups_total(left_groups, analysis) + month_end_groups_total(monthly_groups, analysis) == analysis.merchant_paid_total_fees
+    assert qual_disc.is_likely_daily_paid
+    assert fixed_network.source_label == "Card brand / network"
+    assert dues.source_label == "Card brand / network"
 
 
 MAVERICK_SAMPLE = """

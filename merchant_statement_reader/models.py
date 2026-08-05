@@ -103,6 +103,15 @@ class FeeGroup:
             )
         )
 
+    @property
+    def source_label(self) -> str:
+        text = " ".join([self.normalized_name, *self.raw_names]).lower()
+        if self.category == FeeCategory.CARD_BRAND or is_pass_through_processor_text(text) or is_dues_and_assessments_text(text):
+            return "Card brand / network"
+        if self.category == FeeCategory.PROCESSOR:
+            return "Processor / ISO"
+        return "Needs review"
+
 
 @dataclass
 class StatementAnalysis:
