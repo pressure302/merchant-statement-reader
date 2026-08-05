@@ -86,20 +86,22 @@ class MerchantStatementApp(tk.Tk):
         total_var = tk.StringVar(value="$0.00")
         ttk.Label(heading, textvariable=total_var, style="Panel.TLabel", font=("Segoe UI Semibold", 13)).pack(side=tk.RIGHT)
 
-        columns = ("fee", "amount", "source", "rates", "items")
+        columns = ("fee", "amount", "volume", "source", "rates", "items")
         tree = ttk.Treeview(parent, columns=columns, show="headings", selectmode="browse")
         headings = {
             "fee": "Fee",
             "amount": "Amount",
+            "volume": "Volume",
             "source": "Source",
             "rates": "Rate",
             "items": "Items",
         }
         widths = {
-            "fee": 265,
+            "fee": 240,
             "amount": 105,
-            "source": 150,
-            "rates": 110,
+            "volume": 105,
+            "source": 140,
+            "rates": 95,
             "items": 70,
         }
         for column in columns:
@@ -152,7 +154,7 @@ class MerchantStatementApp(tk.Tk):
         groups = self.analysis.grouped_fees()
         with open(path, "w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["Comparison Role", "Category", "Fee", "Amount", "Source", "Brands", "Rates", "Items", "Confidence", "Raw Names"])
+            writer.writerow(["Comparison Role", "Category", "Fee", "Amount", "Volume", "Source", "Brands", "Rates", "Items", "Confidence", "Raw Names"])
             for group in groups:
                 writer.writerow([group.comparison_role.value] + group_to_row(group) + [", ".join(sorted(group.raw_names))])
         messagebox.showinfo("Export complete", f"Saved {Path(path).name}.")
@@ -196,6 +198,7 @@ def group_to_row(group: FeeGroup) -> list[str]:
         group.category.value,
         group.normalized_name,
         money(group.amount),
+        volume(group.volume),
         group.source_label,
         ", ".join(sorted(group.brands)),
         ", ".join(sorted(group.rates)),
@@ -209,6 +212,7 @@ def group_to_display_row(group: FeeGroup, is_daily_paid: bool = False) -> list[s
     return [
         fee_name,
         money(group.amount),
+        volume(group.volume),
         group.source_label,
         ", ".join(sorted(group.rates)),
         str(group.item_count or ""),
@@ -220,7 +224,14 @@ def card_processing_panel_groups(analysis: StatementAnalysis) -> list[FeeGroup]:
         *analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING),
         *analysis.comparison_groups_for(ComparisonRole.PASS_THROUGH),
     ]
-    return sorted(groups, key=lambda group: (0 if group.comparison_role == ComparisonRole.CARD_PROCESSING else 1, group.normalized_name.lower()))
+    return sorted(
+        groups,
+        key=lambda group: (
+            1 if analysis.customer_paid_fees and group.is_likely_daily_paid else 0,
+            0 if group.comparison_role == ComparisonRole.CARD_PROCESSING else 1,
+            group.normalized_name.lower(),
+        ),
+    )
 
 
 def month_end_groups_total(groups: list[FeeGroup], analysis: StatementAnalysis) -> Decimal:
@@ -244,6 +255,12 @@ def total_fees_display(analysis: StatementAnalysis) -> str:
 
 def money(value: Decimal) -> str:
     return f"${value:,.2f}"
+
+
+def volume(value: Decimal) -> str:
+    if not value:
+        return ""
+    return f"{value:,.2f}"
 
 
 def percent(value: Decimal | None) -> str:
