@@ -228,10 +228,18 @@ def card_processing_panel_groups(analysis: StatementAnalysis) -> list[FeeGroup]:
         groups,
         key=lambda group: (
             1 if analysis.customer_paid_fees and group.is_likely_daily_paid else 0,
-            0 if group.comparison_role == ComparisonRole.CARD_PROCESSING else 1,
+            source_sort_rank(group),
             group.normalized_name.lower(),
         ),
     )
+
+
+def source_sort_rank(group: FeeGroup) -> int:
+    if group.source_label == "Processor / ISO":
+        return 0
+    if group.source_label == "Card brand / network":
+        return 1
+    return 2
 
 
 def month_end_groups_total(groups: list[FeeGroup], analysis: StatementAnalysis) -> Decimal:

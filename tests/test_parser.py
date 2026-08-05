@@ -230,6 +230,16 @@ def test_daily_paid_statement_explains_month_end_fees_without_merchant_data() ->
 
     daily_paid_index = left_groups.index(qual_disc)
     last_month_end_index = max(index for index, group in enumerate(left_groups) if not group.is_likely_daily_paid)
+    first_card_brand_index = min(
+        index
+        for index, group in enumerate(left_groups)
+        if not group.is_likely_daily_paid and group.source_label == "Card brand / network"
+    )
+    last_processor_index = max(
+        index
+        for index, group in enumerate(left_groups)
+        if not group.is_likely_daily_paid and group.source_label == "Processor / ISO"
+    )
 
     assert analysis.total_processing == Decimal("5923.71")
     assert analysis.total_fees == Decimal("310.79")
@@ -239,6 +249,7 @@ def test_daily_paid_statement_explains_month_end_fees_without_merchant_data() ->
     assert month_end_groups_total(monthly_groups, analysis) == Decimal("28.20")
     assert month_end_groups_total(left_groups, analysis) + month_end_groups_total(monthly_groups, analysis) == analysis.merchant_paid_total_fees
     assert qual_disc.is_likely_daily_paid
+    assert last_processor_index < first_card_brand_index
     assert daily_paid_index > last_month_end_index
     assert group_to_display_row(qual_disc, is_daily_paid=True)[2] == "5,917.14"
     assert group_to_display_row(fixed_network)[2] == ""
