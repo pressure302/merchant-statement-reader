@@ -345,9 +345,7 @@ def panel_total_display(month_end_total: Decimal, daily_paid: Decimal) -> str:
 
 
 def total_fees_display(analysis: StatementAnalysis) -> str:
-    if not analysis.customer_paid_fees:
-        return money(analysis.merchant_paid_total_fees)
-    return f"{money(analysis.merchant_paid_total_fees)}\nDaily paid: {money(analysis.customer_paid_fees)}"
+    return money(analysis.merchant_paid_total_fees)
 
 
 def money(value: Decimal) -> str:

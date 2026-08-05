@@ -164,7 +164,7 @@ def test_paysafe_statement_detects_flat_pricing_when_tier_rates_match() -> None:
     assert analysis.total_fees == Decimal("2537.66")
     assert analysis.customer_paid_fees == Decimal("2141.73")
     assert analysis.merchant_paid_total_fees == Decimal("395.93")
-    assert total_fees_display(analysis) == "$395.93\nDaily paid: $2,141.73"
+    assert total_fees_display(analysis) == "$395.93"
     assert pricing.program_type == "Flat rate"
     assert pricing.rate == Decimal("3.84600")
     assert pricing.per_transaction_fee == Decimal("0.1000")
