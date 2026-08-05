@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import tkinter as tk
+import tkinter.font as tkfont
 from decimal import Decimal
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -15,8 +16,8 @@ class MerchantStatementApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Merchant Statement Reader")
-        self.geometry("1180x760")
-        self.minsize(960, 640)
+        self.geometry("1380x760")
+        self.minsize(1120, 640)
         self.analysis: StatementAnalysis | None = None
         self._build_style()
         self._build_layout()
@@ -86,27 +87,11 @@ class MerchantStatementApp(tk.Tk):
         total_var = tk.StringVar(value="$0.00")
         ttk.Label(heading, textvariable=total_var, style="Panel.TLabel", font=("Segoe UI Semibold", 13)).pack(side=tk.RIGHT)
 
-        columns = ("fee", "amount", "volume", "source", "rates", "items")
+        columns = tuple(COLUMN_HEADINGS)
         tree = ttk.Treeview(parent, columns=columns, show="headings", selectmode="browse")
-        headings = {
-            "fee": "Fee",
-            "amount": "Amount",
-            "volume": "Volume",
-            "source": "Source",
-            "rates": "Rate",
-            "items": "Items",
-        }
-        widths = {
-            "fee": 240,
-            "amount": 105,
-            "volume": 105,
-            "source": 140,
-            "rates": 95,
-            "items": 70,
-        }
         for column in columns:
-            tree.heading(column, text=headings[column])
-            tree.column(column, width=widths[column], anchor=tk.W)
+            tree.heading(column, text=COLUMN_HEADINGS[column])
+            tree.column(column, width=COLUMN_MIN_WIDTHS[column], minwidth=COLUMN_MIN_WIDTHS[column], anchor=tk.W, stretch=True)
 
         yscroll = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscrollcommand=yscroll.set)
@@ -191,6 +176,78 @@ class MerchantStatementApp(tk.Tk):
         for group in groups:
             tags = ("daily_paid",) if mark_daily_paid and group.is_likely_daily_paid else ()
             tree.insert("", tk.END, values=group_to_display_row(group, is_daily_paid=bool(tags)), tags=tags)
+        self.after_idle(lambda: autofit_tree_columns(tree))
+
+
+COLUMN_HEADINGS = {
+    "fee": "Fee",
+    "amount": "Amount",
+    "volume": "Volume",
+    "source": "Source",
+    "rates": "Rate",
+    "items": "Items",
+}
+
+COLUMN_MIN_WIDTHS = {
+    "fee": 150,
+    "amount": 82,
+    "volume": 78,
+    "source": 112,
+    "rates": 62,
+    "items": 54,
+}
+
+COLUMN_MAX_WIDTHS = {
+    "fee": 290,
+    "amount": 120,
+    "volume": 120,
+    "source": 165,
+    "rates": 125,
+    "items": 75,
+}
+
+
+def autofit_tree_columns(tree: ttk.Treeview) -> None:
+    columns = list(tree["columns"])
+    text_font = tkfont.nametofont("TkDefaultFont")
+    heading_font = tkfont.nametofont("TkHeadingFont")
+    desired: dict[str, int] = {}
+
+    for column in columns:
+        heading_width = heading_font.measure(COLUMN_HEADINGS[column]) + 24
+        value_width = max(
+            (text_font.measure(str(tree.set(item, column))) + 24 for item in tree.get_children()),
+            default=0,
+        )
+        desired[column] = min(max(heading_width, value_width, COLUMN_MIN_WIDTHS[column]), COLUMN_MAX_WIDTHS[column])
+
+    available = max(tree.winfo_width() - 22, sum(COLUMN_MIN_WIDTHS[column] for column in columns))
+    total_desired = sum(desired.values())
+    if total_desired > available:
+        desired = fit_columns_to_width(desired, available)
+    elif total_desired < available:
+        desired["fee"] += available - total_desired
+
+    for column in columns:
+        tree.column(column, width=int(desired[column]))
+
+
+def fit_columns_to_width(widths: dict[str, int], available: int) -> dict[str, int]:
+    fitted = widths.copy()
+    excess = sum(fitted.values()) - available
+    shrinkable = [column for column in fitted if fitted[column] > COLUMN_MIN_WIDTHS[column]]
+    while excess > 0 and shrinkable:
+        per_column = max(1, excess // len(shrinkable))
+        next_shrinkable: list[str] = []
+        for column in shrinkable:
+            room = fitted[column] - COLUMN_MIN_WIDTHS[column]
+            shrink = min(room, per_column)
+            fitted[column] -= shrink
+            excess -= shrink
+            if fitted[column] > COLUMN_MIN_WIDTHS[column]:
+                next_shrinkable.append(column)
+        shrinkable = next_shrinkable
+    return fitted
 
 
 def group_to_row(group: FeeGroup) -> list[str]:
