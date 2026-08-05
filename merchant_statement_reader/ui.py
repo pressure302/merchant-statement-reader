@@ -68,6 +68,7 @@ class MerchantStatementApp(tk.Tk):
             "card_brand": self._metric(source_metrics, "Card Brand / Network", 1, "FeesMetric.TLabel"),
             "daily_paid": self._metric(source_metrics, "Daily Paid", 2, "FeesMetric.TLabel"),
         }
+        source_metrics.columnconfigure(3, weight=1, uniform="metrics")
 
         main = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
         main.pack(fill=tk.BOTH, expand=True)
@@ -80,9 +81,10 @@ class MerchantStatementApp(tk.Tk):
         self.processor_total_var = self._build_fee_panel(processor_panel, "Monthly / Optional Charges")
 
     def _metric(self, parent: ttk.Frame, name: str, column: int, value_style: str = "Metric.TLabel") -> tk.StringVar:
-        card = ttk.Frame(parent, style="Panel.TFrame", padding=14)
-        card.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 10, 0))
-        parent.columnconfigure(column, weight=1)
+        card = ttk.Frame(parent, style="Panel.TFrame", padding=14, height=METRIC_CARD_HEIGHT)
+        card.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 10, 0))
+        card.grid_propagate(False)
+        parent.columnconfigure(column, weight=1, uniform="metrics")
         ttk.Label(card, text=name, style="MetricName.TLabel").pack(anchor=tk.W)
         value = tk.StringVar(value="--")
         ttk.Label(card, textvariable=value, style=value_style).pack(anchor=tk.W, pady=(4, 0))
@@ -199,6 +201,8 @@ COLUMN_HEADINGS = {
     "rates": "Rate",
     "items": "Items",
 }
+
+METRIC_CARD_HEIGHT = 88
 
 COLUMN_MIN_WIDTHS = {
     "fee": 150,
