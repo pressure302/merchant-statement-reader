@@ -87,6 +87,22 @@ class FeeGroup:
             return ComparisonRole.CARD_PROCESSING
         return ComparisonRole.HIDDEN
 
+    @property
+    def is_likely_daily_paid(self) -> bool:
+        text = " ".join([self.normalized_name, *self.raw_names]).lower()
+        return any(
+            term in text
+            for term in (
+                "disc 1",
+                "discount",
+                "mqual disc",
+                "nqual disc",
+                "qual disc",
+                "sales disc",
+                "sales discount",
+            )
+        )
+
 
 @dataclass
 class StatementAnalysis:

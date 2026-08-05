@@ -31,6 +31,7 @@ class MerchantStatementApp(tk.Tk):
         self.style.configure("Panel.TLabel", background="#ffffff")
         self.style.configure("Title.TLabel", font=("Segoe UI Semibold", 18), background="#f6f7f9")
         self.style.configure("Metric.TLabel", font=("Segoe UI Semibold", 20), background="#ffffff")
+        self.style.configure("FeesMetric.TLabel", font=("Segoe UI Semibold", 15), background="#ffffff")
         self.style.configure("PricingMetric.TLabel", font=("Segoe UI Semibold", 15), background="#ffffff")
         self.style.configure("MetricName.TLabel", foreground="#5c6675", background="#ffffff")
         self.style.configure("TButton", font=("Segoe UI", 10), padding=(12, 8))
@@ -54,7 +55,7 @@ class MerchantStatementApp(tk.Tk):
         metrics.pack(fill=tk.X, pady=(0, 16))
         self.metric_vars = {
             "processing": self._metric(metrics, "Total Processing", 0),
-            "fees": self._metric(metrics, "Total Fees", 1),
+            "fees": self._metric(metrics, "Total Fees", 1, "FeesMetric.TLabel"),
             "effective": self._metric(metrics, "Effective Rate", 2),
             "processor": self._metric(metrics, "Processor Pricing", 3, "PricingMetric.TLabel"),
         }
@@ -105,6 +106,7 @@ class MerchantStatementApp(tk.Tk):
 
         yscroll = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscrollcommand=yscroll.set)
+        tree.tag_configure("daily_paid", background="#fff3bf", foreground="#1d2430")
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         yscroll.pack(side=tk.RIGHT, fill=tk.Y)
         if title.startswith("Card"):
@@ -157,11 +159,15 @@ class MerchantStatementApp(tk.Tk):
         assert self.analysis is not None
         analysis = self.analysis
         self.metric_vars["processing"].set(money(analysis.total_processing))
-        self.metric_vars["fees"].set(money(analysis.merchant_paid_total_fees))
+        self.metric_vars["fees"].set(total_fees_display(analysis))
         self.metric_vars["effective"].set(percent(analysis.effective_rate))
         self.metric_vars["processor"].set(analysis.pricing_summary.display_text)
 
-        self._render_table(self.card_brand_tree, analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING))
+        self._render_table(
+            self.card_brand_tree,
+            analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING),
+            mark_daily_paid=bool(analysis.customer_paid_fees),
+        )
         self._render_table(self.processor_tree, analysis.comparison_groups_for(ComparisonRole.MONTHLY_OPTIONAL))
         self.card_brand_total_var.set(money(analysis.card_processing_processor_total))
         self.processor_total_var.set(money(analysis.monthly_optional_processor_total))
@@ -178,10 +184,11 @@ class MerchantStatementApp(tk.Tk):
             f"{money(analysis.competitive_processor_total)}.{customer_paid}{unknown}{hidden}"
         )
 
-    def _render_table(self, tree: ttk.Treeview, groups: list[FeeGroup]) -> None:
+    def _render_table(self, tree: ttk.Treeview, groups: list[FeeGroup], mark_daily_paid: bool = False) -> None:
         tree.delete(*tree.get_children())
         for group in groups:
-            tree.insert("", tk.END, values=group_to_display_row(group))
+            tags = ("daily_paid",) if mark_daily_paid and group.is_likely_daily_paid else ()
+            tree.insert("", tk.END, values=group_to_display_row(group, is_daily_paid=bool(tags)), tags=tags)
 
 
 def group_to_row(group: FeeGroup) -> list[str]:
@@ -196,13 +203,20 @@ def group_to_row(group: FeeGroup) -> list[str]:
     ]
 
 
-def group_to_display_row(group: FeeGroup) -> list[str]:
+def group_to_display_row(group: FeeGroup, is_daily_paid: bool = False) -> list[str]:
+    fee_name = f"{group.normalized_name} (Daily paid)" if is_daily_paid else group.normalized_name
     return [
-        group.normalized_name,
+        fee_name,
         money(group.amount),
         ", ".join(sorted(group.rates)),
         str(group.item_count or ""),
     ]
+
+
+def total_fees_display(analysis: StatementAnalysis) -> str:
+    if not analysis.customer_paid_fees:
+        return money(analysis.merchant_paid_total_fees)
+    return f"{money(analysis.merchant_paid_total_fees)}\nDaily paid: {money(analysis.customer_paid_fees)}"
 
 
 def money(value: Decimal) -> str:

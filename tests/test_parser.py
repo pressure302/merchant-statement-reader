@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from merchant_statement_reader.models import ComparisonRole, FeeCategory
 from merchant_statement_reader.parser import analyze_statement
+from merchant_statement_reader.ui import total_fees_display
 
 
 SAMPLE = """
@@ -98,6 +99,7 @@ def test_pricing_summary_detects_fiserv_style_markup() -> None:
     analysis = analyze_statement(FISERV_STYLE_CARD_PROCESSING_SAMPLE)
     pricing = analysis.pricing_summary
     dues = next(group for group in analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING) if group.normalized_name == "Dues And Assessments")
+    disc = next(group for group in analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING) if group.normalized_name == "Disc 1")
 
     assert pricing.program_type == "IC+"
     assert pricing.rate == Decimal("3.00000")
@@ -105,6 +107,8 @@ def test_pricing_summary_detects_fiserv_style_markup() -> None:
     assert analysis.customer_paid_fees == Decimal("2.68")
     assert analysis.merchant_paid_total_fees == Decimal("708.98")
     assert dues.amount == Decimal("10.33")
+    assert not dues.is_likely_daily_paid
+    assert disc.is_likely_daily_paid
 
 
 PAYSAFE_SAMPLE = """
@@ -147,17 +151,21 @@ def test_paysafe_statement_detects_flat_pricing_when_tier_rates_match() -> None:
     analysis = analyze_statement(PAYSAFE_SAMPLE)
     pricing = analysis.pricing_summary
     dues = next(group for group in analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING) if group.normalized_name == "Dues And Assessments")
+    nqual = next(group for group in analysis.comparison_groups_for(ComparisonRole.CARD_PROCESSING) if group.normalized_name == "Nqual Disc")
 
     assert analysis.processor_name == "Paysafe"
     assert analysis.total_processing == Decimal("55687.60")
     assert analysis.total_fees == Decimal("2537.66")
     assert analysis.customer_paid_fees == Decimal("2141.73")
     assert analysis.merchant_paid_total_fees == Decimal("395.93")
+    assert total_fees_display(analysis) == "$395.93\nDaily paid: $2,141.73"
     assert pricing.program_type == "Flat rate"
     assert pricing.rate == Decimal("3.84600")
     assert pricing.per_transaction_fee == Decimal("0.1000")
     assert analysis.hidden_processor_total == Decimal("0")
     assert dues.amount == Decimal("66.92")
+    assert not dues.is_likely_daily_paid
+    assert nqual.is_likely_daily_paid
 
 
 TRUE_TIERED_SAMPLE = PAYSAFE_SAMPLE.replace(
